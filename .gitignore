@@ -1,0 +1,9 @@
+# Downloaded firmware and locally reconstructed images are not repository sources.
+/zenfone10_WW_*.zip
+/payload.bin
+/*.img
+/*.efi
+
+# Python bytecode
+__pycache__/
+*.py[cod]
