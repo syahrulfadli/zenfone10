@@ -16,7 +16,7 @@ This small Python utility collects selected Android properties and Fastboot vari
 | Inspect installed OpenBeta Binder client | ✅ Complete | It binds to `UnlockService` but calls only string getters; `KeyTool`'s questionnaire token does not reach the byte-array writer. |
 | Trace ASUS unlock provisioning chain | ✅ Historical flow mapped | Legacy ASUS APK obtains `Secrettoken` from `/unlock/register` and calls Binder transaction 7; current firmware maps it to `C0(byte[])`. Server support for this model/build is unknown. |
 | Audit installed system APKs | ✅ Scoped | Exact package/DEX scan of 194 APKs in `system` found only allowlisted OpenBeta; other partitions were not fully manifest-scanned. |
-| Compare FRP and OEM token verifiers | 🟡 Partial | FRP reads `asuskey2`/`signature` through a separate EFI verifier; its success branch calls an FRP erase helper. OEM unlock uses `asuskey` and the embedded ASUS certificate. FRP trust key and effects on the permission bit remain unknown. |
+| Compare FRP and OEM token verifiers | 🟡 Partial | FRP's key ID 1 selects an embedded RSA-2048 certificate and its success branch calls an FRP erase helper. OEM unlock uses a separate `asuskey` certificate path. The FRP erase effect and current signer availability remain unknown. |
 | Determine whether an authorized flow remains available | ⬜ Queued | Need confirmation that ASUS still issues a token for this model/build; no server request has been sent. |
 
 The sequence follows the status-section style used by [AnyPS5](https://github.com/boykopovar/AnyPS5). Analysis so far is offline; no FRP write, image patch, or device unlock request has been made.
@@ -31,7 +31,8 @@ The sequence follows the status-section style used by [AnyPS5](https://github.co
 - [x] Check installed `system` APK manifests and DEX for allowlisted clients; only OpenBeta matched, within that partition scan.
 - [x] Compare FRP and OEM verifier call paths; their input data and entrypoints are distinct.
 - [x] Trace the FRP validation-success branch statically; it invokes a helper whose failure log is `erase frp Failed!!`.
-- [ ] Identify the FRP verifier's trust material and determine how FRP erase affects future `get_unlock_ability` reads.
+- [x] Identify the FRP verifier's embedded key-ID-1 certificate and its EFI `ASN1X509Dxe` protocol.
+- [ ] Determine how FRP erase affects future `get_unlock_ability` reads; the erase protocol implementation was not found in the inspected OTA firmware images.
 - [ ] Determine whether ASUS's provisioning service still issues tokens for Zenfone 10 build `WW_35.0604.0404.165`.
 - [ ] Establish whether the distinct `oem asus-unlock` path can change the standard permission value; current evidence does not show that it can.
 
