@@ -19,7 +19,7 @@ For agent continuity, start with [`CLAUDE.md`](CLAUDE.md) and [`AGENT_HANDOFF.md
 | Trace ASUS unlock provisioning chain | ✅ Historical flow mapped | Legacy ASUS APK obtains `Secrettoken` from `/unlock/register` and calls Binder transaction 7; current firmware maps it to `C0(byte[])`. Server support for this model/build is unknown. |
 | Audit installed system APKs | ✅ Scoped | Exact package/DEX scan of 194 APKs in `system` found only allowlisted OpenBeta; other partitions were not fully manifest-scanned. |
 | Compare FRP and OEM token verifiers | 🟡 Partial | FRP's key ID 1 selects an embedded RSA-2048 certificate; its success helper zeros 4 KiB at FRP LBA 0. The permission query reads the last byte at `LastBlock`, so a multi-block partition keeps that flag outside the erased block. OEM unlock uses a separate `asuskey` certificate path. |
-| Trace FRP erase and permission-byte locations | ✅ Static path mapped | Correct EFI GUID decoding gives `91b72d4d-71e0-4cbf-9b8e-236381cff17a`; the helper writes one zeroed 4,096-byte block at LBA 0, while `get_unlock_ability` reads the last byte of the last block. The target partition's exact `LastBlock` is not in the OTA. |
+| Trace FRP erase and permission-byte locations | ✅ Complete | Correct EFI GUID decoding gives `91b72d4d-71e0-4cbf-9b8e-236381cff17a`; the helper writes one zeroed 4,096-byte block at LBA 0, while `get_unlock_ability` reads the last byte of the last block. Read-only `getvar partition-size:frp=0x80000` (512 KiB) puts that byte at offset 524,287 — outside the zeroed block for any block size — so the erase path cannot flip the flag. |
 | Determine whether an authorized flow remains available | ⬜ Queued | Need confirmation that ASUS still issues a token for this model/build; no server request has been sent. |
 
 The sequence follows the status-section style used by [AnyPS5](https://github.com/boykopovar/AnyPS5). Analysis so far is offline; no FRP write, image patch, or device unlock request has been made.
@@ -36,7 +36,7 @@ The sequence follows the status-section style used by [AnyPS5](https://github.co
 - [x] Trace the FRP validation-success branch statically; it invokes a helper whose failure log is `erase frp Failed!!`.
 - [x] Identify the FRP verifier's embedded key-ID-1 certificate and its EFI `ASN1X509Dxe` protocol.
 - [x] Trace the FRP helper's block operation and compare it with the permission reader: zero-fill/write at LBA 0 versus reading the final byte at `LastBlock`.
-- [ ] Confirm the Zenfone 10 FRP partition's actual size/`LastBlock`; the official OTA omits GPT metadata.
+- [x] Confirm the Zenfone 10 FRP partition's actual size/`LastBlock`; read-only `getvar partition-size:frp` returned `0x80000` (512 KiB), placing the permission byte at offset 524,287, outside the helper's zeroed 4,096-byte block.
 - [ ] Determine whether ASUS's provisioning service still issues tokens for Zenfone 10 build `WW_35.0604.0404.165`.
 - [ ] Establish whether the distinct `oem asus-unlock` path can change the standard permission value; current evidence does not show that it can.
 

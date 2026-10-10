@@ -7,7 +7,7 @@
 - Android security patch: `2026-08-05` (matches the ASUS release note for this build)
 - Bootloader: `0.0.024.0-WW-user` (`version-bootloader`; `version` is unavailable)
 - OEM unlocking option: unavailable (reported by the owner)
-- Read-only bootloader Fastboot results: `is-userspace=no`, `unlocked=no`, `secure=yes`, `flashing get_unlock_ability=0`.
+- Read-only bootloader Fastboot results: `is-userspace=no`, `unlocked=no`, `secure=yes`, `flashing get_unlock_ability=0`, `partition-size:frp=0x80000` (512 KiB).
 
 The device is currently locked. The user verified bootloader Fastboot with `is-userspace=no`; that mode reports `get_unlock_ability=0`. The earlier rejected requests were made in `fastbootd` and do not count as unlock attempts by the bootloader. No unlock, flash, erase, or downgrade operation succeeded.
 
@@ -62,7 +62,7 @@ Static tracing of the FRP/object path shows it reads the UTF-16 object fields `a
 
 The FRP verifier's zero return reaches code at `0xa0e34`, which calls helper `0x277b0`; a nonzero return logs `erase frp Failed!!`. Correctly decoding the embedded EFI GUID's little-endian fields yields `91b72d4d-71e0-4cbf-9b8e-236381cff17a`, the same GUID used as the `frp` GPT partition type in a public Qualcomm bootloader image example. That cross-device example is a clue, not proof of ASUS's exact partition table. In this ABL, the helper uses the GUID while enumerating storage handles, allocates a 4,096-byte buffer, reads LBA 0, zero-fills all 4,096 bytes, then writes that block back to LBA 0. It does not call the standard Fastboot unlock handler.
 
-The separate `get_unlock_ability` path resolves the `frp` block device, reads its `EFI_BLOCK_IO_MEDIA.LastBlock` using `BlockSize` bytes, and stores bit 0 of the buffer's final byte. Under the EDK2 Block I/O layout, this is the last byte of the partition, while the FRP helper zeros the first 4,096 bytes. Thus, for any multi-block `frp` partition, the helper does not touch the permission byte and does not set unlock ability to 1. The OTA does not include the target's GPT size/`LastBlock`, so the exact partition extent still needs confirmation. No FRP command, unlock operation, or signature verification was executed on a device.
+The separate `get_unlock_ability` path resolves the `frp` block device, reads its `EFI_BLOCK_IO_MEDIA.LastBlock` using `BlockSize` bytes, and stores bit 0 of the buffer's final byte. Under the EDK2 Block I/O layout, this is the last byte of the partition, while the FRP helper zeros the first 4,096 bytes. Thus, for any multi-block `frp` partition, the helper does not touch the permission byte and does not set unlock ability to 1. A read-only `fastboot getvar partition-size:frp` in bootloader Fastboot returned `0x80000` (524,288 bytes = 512 KiB), read from the same ABL's GPT. The permission byte is therefore at file offset `size-1 = 524,287` regardless of EFI block size (4,096-byte blocks → `LastBlock=127`; 512-byte blocks → `LastBlock=1023`; both place the permission byte at 524,287), which lies far past the first 4,096 bytes the helper zeros. This confirms, now with the real partition extent and no block-size assumption, that the post-verifier erase-FRP path cannot change `get_unlock_ability` to 1 — a negative result, not an unlock path. No FRP command, unlock operation, or signature verification was executed on a device.
 
 The FRP verifier selects trust material using its fifth argument: the call at `0xa08fc` passes key ID `1`, and LinuxLoader's selector at `0x45e80` maps ID 1 to an 865-byte DER certificate at PE RVA `0x121b4c`. OpenSSL parses it as a self-signed RSA-2048 certificate using SHA-256/RSA, subject `C=AU, ST=Some-State, O=Internet Widgits Pty Ltd`, valid through 2048. Its SHA-256 fingerprint is `1D:96:AE:88:3C:22:8B:D2:7B:FB:C9:2B:D9:83:7C:CE:E8:7A:F8:13:23:93:8C:6F:EC:EC:29:48:7F:9F:7D:E7`; `openssl verify -check_ss_sig` accepts it as self-signed. The certificate contains a public key, not its signing private key. This differs from the key-ID-0 `AsusUnlock` certificate and the separate certificate used by `oem asus-unlock`.
 
@@ -72,7 +72,7 @@ For this audit, the `system`, `vendor`, `product`, and `system_ext` images were 
 
 ## Recommended next steps
 
-1. Confirm the Zenfone 10 `frp` partition's size/`LastBlock` from a safe, read-only source; the OTA payload omits GPT metadata. If using the phone, try only a read-only Fastboot variable query and treat an unsupported variable as unknown.
+1. ~~Confirm the Zenfone 10 `frp` partition's size/`LastBlock` from a safe, read-only source.~~ Done: `fastboot getvar partition-size:frp` returned `0x80000` (512 KiB), which puts the `get_unlock_ability` permission byte at offset 524,287, outside the 4,096-byte block the erase helper zeros. The erase-FRP path cannot flip the permission bit.
 2. Establish through public ASUS documentation whether its provisioning service still supports this model/build; the old app flow is cross-model and no server request has been made.
 3. Trace whether the separate OEM token path can alter the standard `flashing unlock` permission state; current evidence does not show that it can.
 4. Keep the host client from sending a standard unlock request while permission is `0`. No FRP edit, image patch, unlock, flash, or downgrade has been attempted; ASUS says downgrade is unavailable for the listed firmware.
