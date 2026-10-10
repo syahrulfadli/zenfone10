@@ -6,6 +6,8 @@ Updated: 2026-10-10. Read this with `CLAUDE.md`, `AGENTS.md`, `progress.md`, and
 
 Find and document evidence about whether an authorized unlock route exists for this Zenfone 10 build. Keep working through evidence-led, offline research; update this checkpoint so another agent can resume without relying on chat history.
 
+**Current answer (see `FEASIBILITY.md` → "Answer to the research question").** Yes, an authorized path exists and is supported by this firmware: the standard Android OEM-unlock flow (`ro.oem_unlock_supported=1`, `frp` as the allow-unlock store). It needs no ASUS token — only the Developer Options "OEM unlocking" toggle, which the OS persists to `frp` so `get_unlock_ability` becomes 1. The device reports `get_unlock_ability=0` because that toggle is currently unavailable, which is a device-runtime/account condition (network / Google account / FRP / MDM policy), not a firmware-removed capability. ASUS's own token unlock is present in the bootloader but unusable (provisioning discontinued; no public token source). No offline firmware trick flips the `frp` bit.
+
 ## Device and Repository
 
 - Device: Zenfone 10 (`ASUS_AI2302`), Android 15, `WW_35.0604.0404.165`.
@@ -26,10 +28,10 @@ Find and document evidence about whether an authorized unlock route exists for t
 
 ## Next Research Tasks
 
-1. Optional, Android-side (read-only): determine *why* the owner's "OEM unlocking" toggle is unavailable — e.g. inspect the extracted `system`/`vendor` for `ro.oem_unlock_supported` / `ro.frp.pst` / the `PersistentDataBlock`/`frp` service config. This is what would legitimately set the `frp` allow-unlock bit (and thus `get_unlock_ability=1`) for the standard path. Keep it to static inspection; do not change device properties.
-2. Assess ASUS provisioning support only through public documentation or static client evidence. Do not contact the endpoint or submit device identifiers; the archival APK is cross-model. (Largely concluded: service discontinued for 2023-era models.)
+1. The core question is answered (above). If deeper confirmation is wanted on *why* the toggle is greyed, inspect (read-only) the framework overlay `config_oemUnlockSupported` and any default `DISALLOW_OEM_UNLOCK` user restriction in the `system`/`product` images; and note the on-device greying hint (e.g. "Connect to the internet or contact your operator"). Do not change device properties or state.
+2. Optional firmware detail: the standard `flashing unlock` handler `0xa27b8` success mechanics were not fully traced (linear disassembler desyncs on literal pools around `0xacc44`/`0xad044`); a function-aware disassembler could confirm exactly how it checks the `frp` allow bit and sets the unlock state. Not required for the conclusion.
 
-Resolved: (a) the `frp` partition extent is confirmed (512 KiB) via read-only `getvar`; the erase-FRP path structurally cannot flip the permission byte. (b) The `0x11010` handle-selection interface is fully mapped (EFI protocol-based, by-name) and proven distinct from the `frp` GPT type GUID (used only in erase helper `0x277b0`). (c) The `oem asus-unlock` token path is proven decoupled from `get_unlock_ability`; it is an independent signed-token-gated unlock needing an ASUS token that is not publicly obtainable.
+Resolved: (a) the `frp` partition extent is confirmed (512 KiB) via read-only `getvar`; the erase-FRP path structurally cannot flip the permission byte. (b) The `0x11010` handle-selection interface is fully mapped (EFI protocol-based, by-name) and proven distinct from the `frp` GPT type GUID (used only in erase helper `0x277b0`). (c) The `oem asus-unlock` token path is proven decoupled from `get_unlock_ability`; it is an independent signed-token-gated unlock needing an ASUS token that is not publicly obtainable. (d) Firmware supports the standard OEM-unlock flow (`ro.oem_unlock_supported=1`, `ro.frp.pst=…/frp`), which is token-free and gated by the Developer Options toggle — this is the authorized route.
 
 ## Disassembly tooling
 
