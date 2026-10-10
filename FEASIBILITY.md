@@ -58,15 +58,15 @@ The Zenfone 10 `DMClient` routes `/key/generate`, `/key/nonce`, `/key/nonceEnc`,
 
 Static AArch64 disassembly of `/vendor/bin/writekey` (SHA-256 `bfe0a9299cbd38017f9bfb3f55e51af71b14b417cd8522b3cdd939a8c9bbed37`) shows it reads `/ADF/asuskey.bin` into a buffer and requires exactly 256 bytes. It then opens `/dev/block/bootdevice/by-name/asuskey` in `wb+` mode, writes those 256 bytes, calls `sync`, and sets `vendor.debug.asuskey.ready=1`; it removes the input file after reading it. Its dynamic imports cover ordinary file I/O, logging, sync, and property APIs, with no crypto library dependency. Combined with the ABL's name-matched Block I/O read into a 256-byte verifier buffer, this maps both ends of the on-device provisioning path to the same partition. The historical client's server field is mapped below; no token payload or runtime transfer was captured for this Zenfone 10. The helper does not appear to perform signature verification; the ABL verifier is the relevant cryptographic gate.
 
-A separate FRP/object path references fields `asuskey2` and `signature` before a 256-byte signature-verification call; its trust key and relation to the `oem asus-unlock` verifier remain unresolved.
+Static tracing of the FRP/object path shows it reads the UTF-16 object fields `asuskey2` and `signature`, copies a 256-byte signature buffer, and calls the verifier wrapper at `0x47270` with a 51-byte data buffer. That wrapper reaches a separate EFI protocol lookup path at `0x46e30` (protocol GUID `408ec123-134e-4b80-9142-b89a0e08f8b3`). Its failure branch leads to `Verify FRP Unlock Signature Failed!!`. The OEM `oem asus-unlock` handler instead reads the 256-byte `asuskey` partition, parses the embedded 981-byte ASUS X.509 certificate, and enters the helper chain through `0xafdc0`/`0xce630`; its call path does not enter `0x47270`. These are distinct verifier entrypoints with different inputs and trust-material setup. A shared lower-level crypto implementation is still possible, but the FRP public key, exact signed-data construction, and success-branch effects are not identified. No FRP command, unlock operation, or signature verification was executed on a device.
 
 For this audit, the `system`, `vendor`, `product`, and `system_ext` images were reconstructed locally from the verified full OTA and each output hash matched its payload manifest entry. `debugfs` was used read-only to inspect the filesystem and extract only the listed small files. No Android property was set, no helper was executed, and no device operation was performed. The built-in public certificate and these services do not themselves provide an authorized signing token.
 
 ## Recommended next steps
 
-1. Compare the embedded-certificate verifier with the separate FRP `asuskey2`/`signature` check.
+1. Identify the FRP verifier's trust material and trace the validation-success branch statically; do not trigger the path on the device.
 2. Establish through ASUS whether its provisioning service still supports this model/build; the old app flow is cross-model and no server request has been made.
-3. Clarify whether the OEM token path can change the standard `flashing unlock` permission state; no current evidence demonstrates that it does.
+3. Clarify whether either vendor path can change the standard `flashing unlock` permission state; current evidence does not show that they do.
 4. Keep the host client from sending a standard unlock request while permission is `0`. No FRP edit, image patch, unlock, flash, or downgrade has been attempted; ASUS says downgrade is unavailable for the listed firmware.
 
 ## References
