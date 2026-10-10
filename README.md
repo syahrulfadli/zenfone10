@@ -4,7 +4,7 @@ This small Python utility collects selected Android properties and Fastboot vari
 
 ## Research status
 
-**Current state:** static firmware analysis is active. The bootloader reports `get_unlock_ability=0`. An ASUS-authorized caller can pass a 256-byte blob through the local provisioning service into the `asuskey` partition. ABL enumerates block devices, filters for the requested partition name `asuskey`, and reads its contents through UEFI Block I/O for verification. The installed OpenBeta client is allowlisted but only uses Binder string getters; its separate questionnaire token is not the 256-byte ABL blob. The authorized blob source remains unknown. No valid token or DIY unlock method has been established.
+**Current state:** the bootloader reports `get_unlock_ability=0`. Static analysis maps the historical ASUS client flow: an ASUS-signed unlock APK requests `Secrettoken` from `/unlock/register`, converts it to bytes, and sends it through Binder transaction 7 to the `asuskey` provisioning path. Its signing certificate matches the `com.asus.filemanager` signer trusted by the Zenfone 10 service. The APK is for ROG Phone 5, and ASUS says its unlock tool for 2023-and-earlier phones has been discontinued. This does not establish that its server still issues a token for Zenfone 10 build `WW_35.0604.0404.165`. No valid token or DIY unlock method has been established.
 
 | Work item | Status | Evidence / next action |
 | --- | --- | --- |
@@ -14,9 +14,10 @@ This small Python utility collects selected Android properties and Fastboot vari
 | Locate unlock handlers | ✅ Located | Fastboot table maps `flashing unlock` and `oem asus-unlock` to separate handlers; ASUS handler has a token-verification failure branch. |
 | Map DMClient network routes | ✅ Complete | `/sync/unlock` posts verified-boot status only. `/key/verify` is a separate keybox flow; no link to the ABL token was found. |
 | Inspect installed OpenBeta Binder client | ✅ Complete | It binds to `UnlockService` but calls only string getters; `KeyTool`'s questionnaire token does not reach the byte-array writer. |
-| Trace ASUS unlock provisioning chain | 🔄 Active | Binder authorization → `/ADF/asuskey.bin` → 256-byte write to the `asuskey` partition → ABL partition-name match and Block I/O read are mapped. Caller source remains unresolved; the service checks signatures against `com.asus.filemanager`. |
+| Trace ASUS unlock provisioning chain | ✅ Historical flow mapped | Legacy ASUS APK obtains `Secrettoken` from `/unlock/register` and calls Binder transaction 7; current firmware maps it to `C0(byte[])`. Server support for this model/build is unknown. |
+| Audit installed system APKs | ✅ Scoped | Exact package/DEX scan of 194 APKs in `system` found only allowlisted OpenBeta; other partitions were not fully manifest-scanned. |
 | Map separate FRP signature path | 🟡 Partial | Static parser references `asuskey2` and `signature`; its relation to `oem asus-unlock` is unknown. |
-| Determine whether an authorized flow remains available | ⬜ Queued | Check the official provisioning protocol and current service availability; no request has been sent. |
+| Determine whether an authorized flow remains available | ⬜ Queued | Need confirmation that ASUS still issues a token for this model/build; no server request has been sent. |
 
 The sequence follows the status-section style used by [AnyPS5](https://github.com/boykopovar/AnyPS5). Analysis so far is offline; no FRP write, image patch, or device unlock request has been made.
 
@@ -26,11 +27,11 @@ The sequence follows the status-section style used by [AnyPS5](https://github.co
 - [x] Trace the DMClient status and keybox routes; confirm `/sync/unlock` carries status, not an unlock token.
 - [x] Link the protected local Binder write method to `/ADF/asuskey.bin` and the property-triggered writer.
 - [x] Inspect OpenBeta's Binder and native-token call paths; its client does not submit the 256-byte payload.
-- [ ] Identify where authorized Binder input bytes come from; static analysis maps the ABL reader to the same named partition written by the vendor helper.
-- [ ] Check whether another allowlisted ASUS client is shipped in the firmware or available as an official package.
+- [x] Identify the historical authorized Binder input source; legacy ASUS client receives it as `Secrettoken` from `/unlock/register`.
+- [x] Check installed `system` APK manifests and DEX for allowlisted clients; only OpenBeta matched, within that partition scan.
 - [ ] Map the embedded certificate verifier and compare it with the separate FRP-signature check.
-- [ ] Compare ASUS token acceptance with the standard `flashing unlock` permission checks.
-- [ ] Determine whether ASUS's authorized provisioning service still supports this model/build.
+- [ ] Determine whether ASUS's provisioning service still issues tokens for Zenfone 10 build `WW_35.0604.0404.165`.
+- [ ] Establish whether the distinct `oem asus-unlock` path can change the standard permission value; current evidence does not show that it can.
 
 ## Requirements
 
