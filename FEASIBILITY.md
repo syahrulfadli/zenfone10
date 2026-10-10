@@ -21,6 +21,8 @@ ASUS stated on ZenTalk that its unlock tool has been discontinued for phone mode
 
 **Standard unlock client: denied by the bootloader's reported permission.** The guarded client refuses when `get_unlock_ability=0`. Separately, this ABL registers an `oem asus-unlock` handler that verifies a token before continuing. A valid token and its current availability have not been established, so this finding is not yet a usable unlock method.
 
+**The two unlock routes are gated by different state and are decoupled.** Disassembly shows `get_unlock_ability` is backed by a global `IsAllowUnlock` at `0x2cbf30`, written only by the `frp` reader `0x9e458` (bit 0 of the partition's last byte) and read back only by the `get_unlock_ability` reporter `0xa2760`; a whole-`.text` load/store cross-reference finds exactly three accesses to that global and none in the ASUS path. The `oem asus-unlock` success path (`0xa528c` → token verifier `0xaff70` → `0x1ae90`) instead sets the device-info *IsUnlocked* byte (`0x2b3eb2`) and persists the DeviceInfo structure through a Qualcomm vendor store protocol (`8e5eff91-21b6-47d3-af2b-c15a01e020ec`, write method, size `0xec8`). It never reads or writes `IsAllowUnlock` and never touches the `frp` partition. The ASUS token path is therefore an independent, signed-token-gated unlock that **bypasses** `get_unlock_ability` rather than changing it; its only cryptographic gate is the token verifier, which requires an ASUS-signed token (private key / provisioning service), not derivable from public firmware.
+
 ## Public advisory review
 
 The Android August 2026 bulletin says patch level `2026-08-05` addresses the Android issues listed for the `2026-08-01` bulletin and earlier patch levels. AOSP also explains that chipset/vendor fixes and device-partner advisories can be separate from the Android patch-level declaration. Therefore, the patch date does not by itself establish the patch state of every proprietary boot-chain component.
@@ -76,7 +78,7 @@ For this audit, the `system`, `vendor`, `product`, and `system_ext` images were 
 
 1. ~~Confirm the Zenfone 10 `frp` partition's size/`LastBlock` from a safe, read-only source.~~ Done: `fastboot getvar partition-size:frp` returned `0x80000` (512 KiB), which puts the `get_unlock_ability` permission byte at offset 524,287, outside the 4,096-byte block the erase helper zeros. The erase-FRP path cannot flip the permission bit.
 2. Establish through public ASUS documentation whether its provisioning service still supports this model/build; the old app flow is cross-model and no server request has been made.
-3. Trace whether the separate OEM token path can alter the standard `flashing unlock` permission state; current evidence does not show that it can.
+3. ~~Trace whether the separate OEM token path can alter the standard `flashing unlock` permission state.~~ Done: it does not. The `oem asus-unlock` success path sets the device-info *IsUnlocked* byte and persists it via a vendor store protocol; it never reads or writes the `IsAllowUnlock`/`get_unlock_ability` global or the `frp` partition. It is an independent, signed-token-gated unlock that bypasses `get_unlock_ability`.
 4. Keep the host client from sending a standard unlock request while permission is `0`. No FRP edit, image patch, unlock, flash, or downgrade has been attempted; ASUS says downgrade is unavailable for the listed firmware.
 
 ## References

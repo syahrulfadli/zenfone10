@@ -38,7 +38,7 @@ The sequence follows the status-section style used by [AnyPS5](https://github.co
 - [x] Trace the FRP helper's block operation and compare it with the permission reader: zero-fill/write at LBA 0 versus reading the final byte at `LastBlock`.
 - [x] Confirm the Zenfone 10 FRP partition's actual size/`LastBlock`; read-only `getvar partition-size:frp` returned `0x80000` (512 KiB), placing the permission byte at offset 524,287, outside the helper's zeroed 4,096-byte block.
 - [x] Map the `0x11010` handle-selection interface: it enumerates by EFI protocol (Block I/O / Simple FS / Device Path + a Qualcomm vendor partition-info protocol) and matches by name; the `frp` GPT type GUID is referenced only inside erase helper `0x277b0`, so the two are distinct.
-- [ ] Trace whether the `oem asus-unlock` success path can alter the `flashing unlock`/`get_unlock_ability` state.
+- [x] Trace whether the `oem asus-unlock` success path can alter the `flashing unlock`/`get_unlock_ability` state; it does not — it sets the device-info *IsUnlocked* byte and persists it via a vendor store, never touching the `IsAllowUnlock`/`frp` state. It is an independent, signed-token-gated unlock.
 - [ ] Determine whether ASUS's provisioning service still issues tokens for Zenfone 10 build `WW_35.0604.0404.165`.
 - [ ] Establish whether the distinct `oem asus-unlock` path can change the standard permission value; current evidence does not show that it can.
 
