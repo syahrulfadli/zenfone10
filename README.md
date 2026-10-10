@@ -4,7 +4,7 @@ This small Python utility collects selected Android properties and Fastboot vari
 
 ## Research status
 
-**Current state:** static firmware analysis is active. The bootloader reports `get_unlock_ability=0`. An ASUS-authorized caller can pass a 256-byte blob through the local provisioning service into the `asuskey` partition. ABL enumerates block devices, filters for the requested partition name `asuskey`, and reads its contents through UEFI Block I/O for verification. The authorized blob source remains unknown. No valid token or DIY unlock method has been established.
+**Current state:** static firmware analysis is active. The bootloader reports `get_unlock_ability=0`. An ASUS-authorized caller can pass a 256-byte blob through the local provisioning service into the `asuskey` partition. ABL enumerates block devices, filters for the requested partition name `asuskey`, and reads its contents through UEFI Block I/O for verification. The installed OpenBeta client is allowlisted but only uses Binder string getters; its separate questionnaire token is not the 256-byte ABL blob. The authorized blob source remains unknown. No valid token or DIY unlock method has been established.
 
 | Work item | Status | Evidence / next action |
 | --- | --- | --- |
@@ -13,7 +13,8 @@ This small Python utility collects selected Android properties and Fastboot vari
 | Trace `get_unlock_ability` state | ✅ Complete | An `frp` lookup read path stores the final buffer byte's bit 0 as the reported flag. |
 | Locate unlock handlers | ✅ Located | Fastboot table maps `flashing unlock` and `oem asus-unlock` to separate handlers; ASUS handler has a token-verification failure branch. |
 | Map DMClient network routes | ✅ Complete | `/sync/unlock` posts verified-boot status only. `/key/verify` is a separate keybox flow; no link to the ABL token was found. |
-| Trace ASUS unlock provisioning chain | 🔄 Active | Binder authorization → `/ADF/asuskey.bin` → 256-byte write to the `asuskey` partition → ABL partition-name match and Block I/O read are mapped. The authorized blob source remains unresolved. |
+| Inspect installed OpenBeta Binder client | ✅ Complete | It binds to `UnlockService` but calls only string getters; `KeyTool`'s questionnaire token does not reach the byte-array writer. |
+| Trace ASUS unlock provisioning chain | 🔄 Active | Binder authorization → `/ADF/asuskey.bin` → 256-byte write to the `asuskey` partition → ABL partition-name match and Block I/O read are mapped. Caller source remains unresolved; the service checks signatures against `com.asus.filemanager`. |
 | Map separate FRP signature path | 🟡 Partial | Static parser references `asuskey2` and `signature`; its relation to `oem asus-unlock` is unknown. |
 | Determine whether an authorized flow remains available | ⬜ Queued | Check the official provisioning protocol and current service availability; no request has been sent. |
 
@@ -24,7 +25,9 @@ The sequence follows the status-section style used by [AnyPS5](https://github.co
 - [x] Link the ABL verifier to the `asuskey` lookup and locate Android-side unlock service components.
 - [x] Trace the DMClient status and keybox routes; confirm `/sync/unlock` carries status, not an unlock token.
 - [x] Link the protected local Binder write method to `/ADF/asuskey.bin` and the property-triggered writer.
+- [x] Inspect OpenBeta's Binder and native-token call paths; its client does not submit the 256-byte payload.
 - [ ] Identify where authorized Binder input bytes come from; static analysis maps the ABL reader to the same named partition written by the vendor helper.
+- [ ] Check whether another allowlisted ASUS client is shipped in the firmware or available as an official package.
 - [ ] Map the embedded certificate verifier and compare it with the separate FRP-signature check.
 - [ ] Compare ASUS token acceptance with the standard `flashing unlock` permission checks.
 - [ ] Determine whether ASUS's authorized provisioning service still supports this model/build.
