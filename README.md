@@ -4,7 +4,7 @@ This small Python utility collects selected Android properties and Fastboot vari
 
 ## Research status
 
-**Current state:** static firmware analysis is active. The bootloader reports `get_unlock_ability=0`; no DIY unlock method or valid authorization token has been established.
+**Current state:** static firmware analysis is active. The bootloader reports `get_unlock_ability=0`. We found an ASUS Android/vendor provisioning chain for unlock data, but its response format and current authorization availability remain unknown; no DIY unlock method or valid token has been established.
 
 | Work item | Status | Evidence / next action |
 | --- | --- | --- |
@@ -12,17 +12,19 @@ This small Python utility collects selected Android properties and Fastboot vari
 | Reconstruct ABL and identify its LinuxLoader application | ✅ Complete | ABL hash matches the OTA manifest; LinuxLoader is an AArch64 PE image. |
 | Trace `get_unlock_ability` state | ✅ Complete | An `frp` lookup read path stores the final buffer byte's bit 0 as the reported flag. |
 | Locate unlock handlers | ✅ Located | Fastboot table maps `flashing unlock` and `oem asus-unlock` to separate handlers; ASUS handler has a token-verification failure branch. |
-| Trace token/signature validation and key source | 🔄 Active | Verifier references `asuskey` and a bundled X.509/RSA certificate; token format and key acceptance remain unresolved. |
-| Determine whether a valid authorized DIY flow exists | ⬜ Queued | Decide only after the verifier and token source are understood. |
+| Trace ASUS unlock provisioning chain | 🔄 Active | ABL verifier looks up `asuskey`; Android firmware has a property-gated `writekey` service and `DMClient` unlock/keybox classes. Exact data flow and server response remain unresolved. |
+| Map separate FRP signature path | 🟡 Partial | Static parser references `asuskey2` and `signature`; its relation to `oem asus-unlock` is unknown. |
+| Determine whether an authorized flow remains available | ⬜ Queued | Check the official provisioning protocol and current service availability; no request has been sent. |
 
 The sequence follows the status-section style used by [AnyPS5](https://github.com/boykopovar/AnyPS5). Analysis so far is offline; no FRP write, image patch, or device unlock request has been made.
 
 ### Next checklist
 
-- [ ] Trace the token parser's fields and how it obtains `asuskey`.
-- [ ] Map the embedded certificate verifier and the separate FRP-signature check.
+- [x] Link the ABL verifier to the `asuskey` lookup and locate Android-side unlock service components.
+- [ ] Trace how `DMClient` obtains authorized unlock data and how the vendor helper exposes it to ABL.
+- [ ] Map the embedded certificate verifier and compare it with the separate FRP-signature check.
 - [ ] Compare ASUS token acceptance with the standard `flashing unlock` permission checks.
-- [ ] Determine whether an authorized token can still be obtained for this model/build.
+- [ ] Determine whether ASUS's authorized provisioning service still supports this model/build.
 
 ## Requirements
 

@@ -39,12 +39,21 @@ An AArch64 cross-reference pass refined those observations. `IsAllowUnlock is %d
 
 The Fastboot command table around PE RVA `0x106e08` maps `flashing get_unlock_ability` to handler `0xa2760`, `flashing unlock` to `0xa27b8`, and `oem asus-unlock` to `0xa528c`. The ASUS handler obtains an argument and calls verifier `0xaff70`; a nonzero return follows the `Verify unlock token fail.` branch, while the success path performs additional state checks and contains a `Device unlocked successfully.` message. The verifier's strings include `verify_RD_unlock` and `asuskey`; its call path passes a 981-byte DER block at image address `0x2b2429` through wrapper `0xafdc0`. Local OpenSSL inspection identifies that block as a self-signed ASUS X.509 certificate with an RSA 2048-bit public key and SHA-256/RSA certificate signature. Its encoded validity ended on 2023-03-29; this does not prove the bootloader checks certificate dates. A separate code path at `0xa0904` reports `Verify FRP Unlock Signature Failed!!`. This strongly suggests a signed vendor token path, but the token format, private signing-key source, current token availability, and relationship to standard `flashing unlock` remain unresolved. The bundled certificate contains a public key; it cannot produce a valid signature by itself.
 
+Further static tracing shows that `oem asus-unlock` calls the verifier without setting a token argument at that call site. The verifier allocates a 256-byte buffer, passes the UTF-16 name `asuskey` to a lookup helper at PE RVA `0x12030`, then passes the bundled certificate to a crypto wrapper. This points to pre-provisioned data rather than a token supplied directly as a Fastboot argument; the lookup backend and precise signed bytes are still unresolved.
+
+The Android-side firmware contains related components. `system/etc/init/init.asus.unlock.rc` labels a disabled one-shot `/vendor/bin/writekey` service as the user unlock tool; a property trigger starts it. The native library `system/fake-libs64/libunlock.asus.so` exposes JNI names including `getNativeKey` and `writeNativeSign`, and references `/ADF/asuskey.bin` plus readiness properties. The vendor `writekey` executable references `/dev/block/bootdevice/by-name/asuskey` and `/ADF/asuskey.bin`, and imports file-read/write and property APIs. This establishes a firmware provisioning path that merits more tracing, but strings and imports alone do not establish exactly how its data reaches the ABL lookup or who authorizes it.
+
+`system/app/DMClient/DMClient.apk` contains classes named `AsusUnlockService`, `HttpGetAsusKeybox`, and `HttpSyncUnlockStatus`, plus the `/sync/unlock` route and the ASUS DM host string. These names suggest an ASUS network-backed flow, but the APK's request/response code has not yet been reconstructed and no endpoint was contacted. A separate FRP/object path references fields `asuskey2` and `signature` before a 256-byte signature-verification call; its trust key and relation to the unlock verifier remain unresolved.
+
+For this audit, the `system`, `vendor`, `product`, and `system_ext` images were reconstructed locally from the verified full OTA and each output hash matched its payload manifest entry. `debugfs` was used read-only to inspect the filesystem and extract only the listed small files. No Android property was set, no helper was executed, and no device operation was performed. The built-in public certificate and these services do not themselves provide an authorized signing token.
+
 ## Recommended next steps
 
-1. Continue tracing `aff70` to recover the expected token fields and exact certificate/key use; check whether the separate FRP signature branch shares this certificate or uses another trust path.
-2. Compare the token flow with the separate `flashing unlock` handler and the permission bit returned by `flashing get_unlock_ability`.
-3. Keep `src/unlock_client.py` from sending a standard unlock request while permission is `0`; no host-side client can change that reported permission.
-4. Do not treat the FRP-related flag or public certificate as a procedure. No FRP edit, image patch, unlock, flash, or downgrade has been attempted; ASUS says downgrade is unavailable for the listed firmware.
+1. Trace `DMClient`'s unlock classes and the `writekey` helper statically to determine the intended authorization/data flow; do not trigger the property-gated service on-device.
+2. Confirm whether ABL's `asuskey` lookup consumes the vendor partition/file contents and reconstruct the exact signed payload and certificate use.
+3. Identify whether the FRP `asuskey2`/`signature` check is independent from the `oem asus-unlock` verifier.
+4. Compare the vendor flow with the separate `flashing unlock` permission check and establish whether ASUS's authorized service still supports this model/build.
+5. Keep the host client from sending a standard unlock request while permission is `0`. No FRP edit, image patch, unlock, flash, or downgrade has been attempted; ASUS says downgrade is unavailable for the listed firmware.
 
 ## References
 
