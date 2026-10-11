@@ -40,8 +40,9 @@ The sequence follows the status-section style used by [AnyPS5](https://github.co
 - [x] Map the `0x11010` handle-selection interface: it enumerates by EFI protocol (Block I/O / Simple FS / Device Path + a Qualcomm vendor partition-info protocol) and matches by name; the `frp` GPT type GUID is referenced only inside erase helper `0x277b0`, so the two are distinct.
 - [x] Trace whether the `oem asus-unlock` success path can alter the `flashing unlock`/`get_unlock_ability` state; it does not — it sets the device-info *IsUnlocked* byte and persists it via a vendor store, never touching the `IsAllowUnlock`/`frp` state. It is an independent, signed-token-gated unlock.
 - [x] Check whether the firmware supports the standard OEM-unlock flow; `vendor` `/build.prop` has `ro.oem_unlock_supported=1` and `ro.frp.pst=…/frp`, so the standard (token-free) path is supported and gated by the `frp` allow bit / Developer Options toggle.
-- [ ] Determine whether ASUS's provisioning service still issues tokens for Zenfone 10 build `WW_35.0604.0404.165`.
-- [ ] Establish whether the distinct `oem asus-unlock` path can change the standard permission value; current evidence does not show that it can.
+- [x] Explain why the "OEM unlocking" toggle is greyed; `framework-res.apk` has no `config_oemUnlockSupported` resource, and the ASUS Settings `OemUnlockPreferenceController` reads `ro.oem_unlock_supported` (=1) and gates the toggle on `isOemUnlockAllowedByUserAndCarrier`. The disabled-state summaries ("Connect to the internet or contact your carrier", "Unavailable on carrier-locked devices", "Bootloader is already unlocked") show the gate is a runtime connectivity/carrier/lock condition.
+- [x] Establish whether the distinct `oem asus-unlock` path can change the standard permission value; it does not — it sets the device-info *IsUnlocked* byte via a vendor store and never touches `IsAllowUnlock`/`frp`.
+- [ ] Determine whether ASUS's provisioning service still issues tokens for Zenfone 10 build `WW_35.0604.0404.165` (public sources only; out of the offline scope).
 
 ## Requirements
 
